@@ -10,21 +10,114 @@ Oauth implementation
 #include <openssl/hmac.h>
 #include <map>
 
-
 using namespace std;
 
-// Application Specific. Generated from apps.twitter.com
-string Consumerkey = "uvSDDZJW7XiG64akUzMgS44tF";
-string ConsumerSecret = "CCu9u5pRUOtXeO9VsitmgVSL4RbQwbiWX06aBLkaRsJRVt6EKL";
+typedef map<string, string> OAuthParameters;
 
-const string HOSTNAME = "http://twitter.com";
-const string REQUEST_TOKEN_URL = "https://api.twitter.com/oauth/request_token";
-const string OAUTH_VER = "1.0";
-const string OAUTH_CALLBACK = "oob";
+/* Contains all info relevant to all requests. e.g Info shared among every OAuth instance */
+struct ConnectionConfig {
+    string Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, auth_token;
+};
 
-typedef std::map <string, string> OAuthParameters;
+/* OAuth represents a single web request. */
+class OAuth {
+    public: 
+        OAuth(ConnectionConfig connection, string, string);
+        void printOAuth();
+    private: 
+        ConnectionConfig conn;
+        OAuthParameters params;
+        void BuildParameters(const string& requestToken = "", const string& httpMethod = "", const string& pin = "");
+        string generateNonce();
+        string generateTimeStamp();
+        string createSignature(const string& requestTokenSecret = "");
+        string urlencode(const string&);
+        string char2hex(char);
+        string HMACSHA1(char[], char[]);
+        string nonce, timeStamp, signature, method, url;
+}; 
 
-string generateNonce()
+OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUse) 
+{
+    conn = ConnectionToUse;
+    method = httpMethod;
+    url = urlToUse;
+    nonce = generateNonce();
+    timeStamp = generateTimeStamp(); 
+    BuildParameters();
+}
+
+void OAuth::BuildParameters(const string& requestToken, const string& requestTokenSecret, const string& pin)
+{
+    //Set first params provided from connection settings
+    params["Authorization"] = "OAuth";
+    params["oauth_consumer_key"] = conn.Consumerkey;
+    params["oauth_nonce"] = nonce;
+    params["oauth_timestamp"] = timeStamp;
+    params["oauth_version"] = conn.oauth_ver;
+    params["oauth_signature_method"] = "HMAC-SHA1";
+
+    if (!requestToken.empty())
+    {
+        params["oauth_token"] = requestToken;
+    }
+
+    if (!pin.empty())
+    {
+        params["oauth_verifier"] = pin;
+    }
+
+    string signature = createSignature(requestTokenSecret);
+}
+
+string OAuth::createSignature(const string& requestTokenSecret)
+{
+    /* 
+        1. Create a single string of query params from the params map
+        2. Generate key from ConsumerSecret and requestTokenSecret (if it exists)
+        3. Generate signature base from http method, base Url, and the single string of query params
+        4. Generate signature from key and signature base
+    */
+
+    //Parameters need to be converted to a single string to be used as query parameters in the url
+    string normalizedParams;
+
+    for (OAuthParameters::const_iterator it = params.begin(); it != params.end(); it++)
+    {
+        if (normalizedParams.size() > 0)
+        {
+            normalizedParams += "&";
+        }
+        normalizedParams += it->first + "=" + it->second;
+    }
+
+    string key = urlencode(conn.ConsumerSecret) + "&" + urlencode(requestTokenSecret);
+    string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
+
+    char keych[1024];
+    char signatureBasech[1024];
+    strcpy(keych, key.c_str());
+    strcpy(signatureBasech, signatureBase.c_str());
+    string signature = HMACSHA1(keych, signatureBasech);
+    
+    return signature;
+}
+
+void OAuth::printOAuth()
+{
+    cout << "Nonce: " << nonce << endl
+         << "Timestamp: " << timeStamp << endl
+         << "=================================" << endl
+         << "Connection Details: " << endl
+         << "Consumer Key: " << conn.Consumerkey << endl
+         << "Consumer Secret: " << conn.ConsumerSecret << endl
+         << "Hostname: " << conn.hostname << endl
+         << "Request Token URL: " << conn.request_token_url << endl
+         << "OAuth Version: " << conn.oauth_ver << endl
+         << "OAuth CallBack: " << conn.oauth_callback << endl;
+}
+
+string OAuth::generateNonce()
 {
     char alphanum[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     string nonce;
@@ -36,56 +129,53 @@ string generateNonce()
     return nonce;
 }
 
-string generateTimeStamp()
+string OAuth::generateTimeStamp()
 {
     time_t t = time(0);
     return to_string(t);
 }
 
-OAuthParameters BuildSignedParameters(string& url, string& httpMethod, string& consumerKey, string& consumerSecret, const string& requestToken = "", const string& requestTokenSecret = "", const string& pin = "")
+// char2hex and urlencode from http://www.zedwood.com/article/111/cpp-urlencode-function
+// modified according to http://oauth.net/core/1.0a/#encoding_parameters
+string OAuth::char2hex( char dec )
 {
-    string timeStamp = generateTimeStamp();
-    string nonce = generateNonce();
+    char dig1 = (dec&0xF0)>>4;
+    char dig2 = (dec&0x0F);
+    if ( 0<= dig1 && dig1<= 9) dig1+=48;    //0,48 in ascii
+    if (10<= dig1 && dig1<=15) dig1+=65-10; //A,65 in ascii
+    if ( 0<= dig2 && dig2<= 9) dig2+=48;
+    if (10<= dig2 && dig2<=15) dig2+=65-10;
 
-    OAuthParameters oauthParameters;
+    string r;
+    r.append( &dig1, 1);
+    r.append( &dig2, 1);
+    return r;
+}
 
-    oauthParameters["oauth_timestamp"] = timeStamp;
-    oauthParameters["oauth_nonce"] = nonce;
-    oauthParameters["oauth_version"] = OAUTH_VER;
-    oauthParameters["oauth_signature_method"] = "HMAC-SHA1";
-    oauthParameters["oauth_consumer_key"] = consumerKey;
-
-    if (!requestToken.empty()) 
+string OAuth::urlencode(const string &c)
+{
+    string escaped;
+    int max = c.length();
+    for(int i=0; i<max; i++)
     {
-        oauthParameters["oauth_token"] = requestToken;
+        if ( (48 <= c[i] && c[i] <= 57) ||//0-9
+            (65 <= c[i] && c[i] <= 90) ||//ABC...XYZ
+            (97 <= c[i] && c[i] <= 122) || //abc...xyz
+            (c[i]=='~' || c[i]=='-' || c[i]=='_' || c[i]=='.')
+            )
+        {
+            escaped.append( &c[i], 1);
+        }
+        else
+        {
+            escaped.append("%");
+            escaped.append( char2hex(c[i]) );//converts char 255 to string "FF"
+        }
     }
-    if (!pin.empty())
-    {
-        oauthParameters["oauth_verifier"] = pin;
-    }
+    return escaped;
 }
 
-string OauthRequestSubmit(OAuthParameters& parameters, string url)
-{
-    
-}
-
-string OauthWebRequest(
-    string& url,
-    string& httpMethod,
-    string& consumerKey,
-    string& consumerSecret,
-    const string& oauthToken = "",
-    const string& oauthTokenSecret = "",
-    const string& pin = ""
-    )
-{
-    // For now assuming that there are no query parameters
-    OAuthParameters oauthSignedParameters = BuildSignedParameters(url, httpMethod, consumerKey, consumerSecret, oauthToken, oauthTokenSecret, pin);
-    return OauthRequestSubmit(oauthSignedParameters, url);
-}
-
-string HMACSHA1(char key[], char data[])
+string OAuth::HMACSHA1(char key[], char data[])
 {
     unsigned char* digest;
     // Using sha1 hash engine here.
@@ -103,9 +193,18 @@ string HMACSHA1(char key[], char data[])
 
 int main() {
     // For testing
-    char key[] = "012345678";
-    char data[] = "hello world";
-    string signature = HMACSHA1(key, data);
-    cout << signature << "\n";
+
+    // 1. Create a new connection config instance for Twitter. This will be used for all OAuth connections related to Twitter
+    ConnectionConfig Twitter;
+    Twitter.Consumerkey = "uvSDDZJW7XiG64akUzMgS44tF";
+    Twitter.ConsumerSecret = "CCu9u5pRUOtXeO9VsitmgVSL4RbQwbiWX06aBLkaRsJRVt6EKL";
+    Twitter.hostname = "http://twitter.com";
+    Twitter.request_token_url = "https://api.twitter.com/oauth/request_token";
+    Twitter.oauth_ver = "1.0";
+    Twitter.oauth_callback = "oob";
+
+    // 2. Create a new connection using Twitter connection config
+    OAuth test(Twitter, "GET", "https://api.twitter.com/oauth/request_token");
+    return 0;
 }
 
