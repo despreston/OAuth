@@ -2,6 +2,12 @@
 
 Oauth implementation
 
+Create request in 2 steps:
+1. Create new ConnectionConfig and assign values to Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, auth_token
+2. Create new Oauth object with parameters:
+    Connection (ConnectionConfig); this is the ConnectionConfig object you created in step 1 or another connection config already created.
+    httpMethod (string); the method to use for http request (GET, POST).
+    url (string); url to make request to.
 */
 
 #include "stdio.h"
@@ -9,6 +15,8 @@ Oauth implementation
 #include <time.h>
 #include <openssl/hmac.h>
 #include <map>
+#include <curl/curl.h>
+#include "basen.hpp"
 
 using namespace std;
 
@@ -28,6 +36,8 @@ class OAuth {
         ConnectionConfig conn;
         OAuthParameters params;
         void BuildParameters(const string& requestToken = "", const string& httpMethod = "", const string& pin = "");
+        void newToken();
+        void webRequest();
         string generateNonce();
         string generateTimeStamp();
         string createSignature(const string& requestTokenSecret = "");
@@ -45,12 +55,58 @@ OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUs
     nonce = generateNonce();
     timeStamp = generateTimeStamp(); 
     BuildParameters();
+    webRequest();
+}
+
+void OAuth::newToken()
+{
+    /*
+        Create a new token. This method must be called before any other requests are made. 
+        If a new request is made and there is no token readily available, this method is called beforehand.
+    */
+}
+
+void OAuth::webRequest()
+{
+    CURL *curl;
+    CURLcode res;
+
+    curl = curl_easy_init();
+    if (curl)
+    {
+        struct curl_slist *chunk = NULL;
+        string header = "Authorization: OAuth ";
+        for (OAuthParameters::const_iterator it = params.begin(); it != params.end(); it++)
+        {
+            header = header + it->first + ":" + "\"" + it->second  + "\",";
+        }
+        header = header.substr(0, header.size()-1);
+
+cout << header << endl;
+        chunk = curl_slist_append(chunk, header.c_str());
+
+        res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
+
+        cout << url.c_str() << endl;
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK)
+        {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res) );
+            curl_easy_cleanup(curl);
+            curl_slist_free_all(chunk);
+        } else {
+            cout << "SUCCESS";
+        }
+    }
 }
 
 void OAuth::BuildParameters(const string& requestToken, const string& requestTokenSecret, const string& pin)
 {
     //Set first params provided from connection settings
-    params["Authorization"] = "OAuth";
     params["oauth_consumer_key"] = conn.Consumerkey;
     params["oauth_nonce"] = nonce;
     params["oauth_timestamp"] = timeStamp;
@@ -68,6 +124,7 @@ void OAuth::BuildParameters(const string& requestToken, const string& requestTok
     }
 
     string signature = createSignature(requestTokenSecret);
+    params["oauth_signature"] = signature;
 }
 
 string OAuth::createSignature(const string& requestTokenSecret)
@@ -94,13 +151,15 @@ string OAuth::createSignature(const string& requestTokenSecret)
     string key = urlencode(conn.ConsumerSecret) + "&" + urlencode(requestTokenSecret);
     string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
 
-    char keych[1024];
-    char signatureBasech[1024];
+    char keych[key.length()];
+    char signatureBasech[signatureBase.length()];
     strcpy(keych, key.c_str());
     strcpy(signatureBasech, signatureBase.c_str());
     string signature = HMACSHA1(keych, signatureBasech);
-    
-    return signature;
+
+    bn::encode_b64(signature.begin(), signature.end(), back_inserter(signature));
+
+    return urlencode(signature);
 }
 
 void OAuth::printOAuth()
@@ -181,10 +240,10 @@ string OAuth::HMACSHA1(char key[], char data[])
     // Using sha1 hash engine here.
     // You may use other hash engines. e.g EVP_md5(), EVP_sha224, EVP_sha512, etc
     digest = HMAC(EVP_sha1(), key, strlen(key), (unsigned char*) data, strlen(data), NULL, NULL);    
- 
+
     // Be careful of the length of string with the choosen hash engine. SHA1 produces a 20-byte hash value which rendered as 40 characters.
     // Change the length accordingly with your choosen hash engine
-    char mdString[20];
+    char mdString[41];
     for(int i = 0; i < 20; i++)
          sprintf(&mdString[i], "%02x", (unsigned int)digest[i]);
  
