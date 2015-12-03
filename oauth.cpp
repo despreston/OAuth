@@ -1,5 +1,7 @@
 /* Desmond Preston 2015
 
+Compile with: sudo g++ -std=c++11 oauth.cpp -lcrypto -lcurl
+
 Oauth implementation
 
 Create request in 2 steps:
@@ -14,9 +16,11 @@ Create request in 2 steps:
 #include <iostream>
 #include <time.h>
 #include <openssl/hmac.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
 #include <map>
 #include <curl/curl.h>
-#include "basen.hpp"
 
 using namespace std;
 
@@ -38,6 +42,7 @@ class OAuth {
         void BuildParameters(const string& requestToken = "", const string& httpMethod = "", const string& pin = "");
         void newToken();
         void webRequest();
+        string base64(const unsigned char*, int);
         string generateNonce();
         string generateTimeStamp();
         string createSignature(const string& requestTokenSecret = "");
@@ -55,7 +60,8 @@ OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUs
     nonce = generateNonce();
     timeStamp = generateTimeStamp(); 
     BuildParameters();
-    webRequest();
+    printOAuth();
+    //webRequest();
 }
 
 void OAuth::newToken()
@@ -75,22 +81,21 @@ void OAuth::webRequest()
     if (curl)
     {
         struct curl_slist *chunk = NULL;
-        string header = "Authorization: OAuth ";
+        string header = "Authorization: OAuth";
         for (OAuthParameters::const_iterator it = params.begin(); it != params.end(); it++)
         {
-            header = header + it->first + ":" + "\"" + it->second  + "\",";
+            header = header + " " + it->first + "=" + "\"" + it->second  + "\",";
         }
         header = header.substr(0, header.size()-1);
 
-cout << header << endl;
         chunk = curl_slist_append(chunk, header.c_str());
 
         res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
-        cout << url.c_str() << endl;
-
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        curl_easy_setopt(curl, CURLOPT_POST, 1);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "test");
 
         res = curl_easy_perform(curl);
         if (res != CURLE_OK)
@@ -148,16 +153,20 @@ string OAuth::createSignature(const string& requestTokenSecret)
         normalizedParams += it->first + "=" + it->second;
     }
 
-    string key = urlencode(conn.ConsumerSecret) + "&" + urlencode(requestTokenSecret);
+    string key = urlencode(conn.ConsumerSecret + "&" + requestTokenSecret);
     string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
+
+    cout << "Normalized Params: \n" << normalizedParams << endl;
+    cout << "Base string: \n" << signatureBase << endl;
 
     char keych[key.length()];
     char signatureBasech[signatureBase.length()];
     strcpy(keych, key.c_str());
     strcpy(signatureBasech, signatureBase.c_str());
+
     string signature = HMACSHA1(keych, signatureBasech);
 
-    bn::encode_b64(signature.begin(), signature.end(), back_inserter(signature));
+    cout << signature << endl;
 
     return urlencode(signature);
 }
@@ -181,10 +190,13 @@ string OAuth::generateNonce()
     char alphanum[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     string nonce;
 
-    for (int i = 0; i <= 16; i++) 
+    srand(time(0));
+
+    for (int i = 0; i <= 31; i++) 
     {
-        nonce += alphanum[rand() % (sizeof(alphanum) -1)];
+        nonce += alphanum[rand() % (sizeof(alphanum)-1)];
     }
+
     return nonce;
 }
 
@@ -192,6 +204,30 @@ string OAuth::generateTimeStamp()
 {
     time_t t = time(0);
     return to_string(t);
+}
+
+string OAuth::base64(const unsigned char *input, int length)
+{
+    /*
+        Convert to base64
+    */
+  BIO *bmem, *b64;
+  BUF_MEM *bptr;
+
+  b64 = BIO_new(BIO_f_base64());
+  bmem = BIO_new(BIO_s_mem());
+  b64 = BIO_push(b64, bmem);
+  BIO_write(b64, input, length);
+  BIO_flush(b64);
+  BIO_get_mem_ptr(b64, &bptr);
+
+  char *buff = (char *)malloc(bptr->length);
+  memcpy(buff, bptr->data, bptr->length-1);
+  buff[bptr->length-1] = 0;
+
+  BIO_free_all(b64);
+
+  return string((const char*)buff);
 }
 
 // char2hex and urlencode from http://www.zedwood.com/article/111/cpp-urlencode-function
@@ -213,6 +249,9 @@ string OAuth::char2hex( char dec )
 
 string OAuth::urlencode(const string &c)
 {
+    /*
+        Encode according to OAuth encoding standard. Not typical URL encoding.
+    */
     string escaped;
     int max = c.length();
     for(int i=0; i<max; i++)
@@ -236,6 +275,10 @@ string OAuth::urlencode(const string &c)
 
 string OAuth::HMACSHA1(char key[], char data[])
 {
+    /*
+        Hash key using data with HMAC-SHA1 then base64 encode the result 
+    */
+
     unsigned char* digest;
     // Using sha1 hash engine here.
     // You may use other hash engines. e.g EVP_md5(), EVP_sha224, EVP_sha512, etc
@@ -244,10 +287,10 @@ string OAuth::HMACSHA1(char key[], char data[])
     // Be careful of the length of string with the choosen hash engine. SHA1 produces a 20-byte hash value which rendered as 40 characters.
     // Change the length accordingly with your choosen hash engine
     char mdString[41];
-    for(int i = 0; i < 20; i++)
+    for(int i = 0; i < 19; i++)
          sprintf(&mdString[i], "%02x", (unsigned int)digest[i]);
- 
-    return string((const char *)mdString);
+
+    return base64((const unsigned char *)mdString, sizeof(mdString));
 }
 
 int main() {
@@ -263,7 +306,7 @@ int main() {
     Twitter.oauth_callback = "oob";
 
     // 2. Create a new connection using Twitter connection config
-    OAuth test(Twitter, "GET", "https://api.twitter.com/oauth/request_token");
+    OAuth test(Twitter, "POST", "https://api.twitter.com/oauth/request_token");
     return 0;
 }
 
