@@ -72,6 +72,9 @@ void OAuth::newToken()
     */
 }
 
+/* 
+    Creates and executes web request using current params and url
+*/
 void OAuth::webRequest()
 {
     CURL *curl;
