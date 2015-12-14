@@ -94,8 +94,7 @@ void OAuth::webRequest()
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-        curl_easy_setopt(curl, CURLOPT_POST, 1);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "test");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
 
         res = curl_easy_perform(curl);
         if (res != CURLE_OK)
