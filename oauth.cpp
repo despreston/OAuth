@@ -15,10 +15,10 @@ Create request in 2 steps:
 #include "stdio.h"
 #include <iostream>
 #include <time.h>
-#include <openssl/hmac.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
+#include "HMAC_SHA1.h"
 #include <map>
 #include <curl/curl.h>
 
@@ -48,7 +48,7 @@ class OAuth {
         string createSignature(const string& requestTokenSecret = "");
         string urlencode(const string&);
         string char2hex(char);
-        string HMACSHA1(char[], char[]);
+        string HMACSHA1(string, string);
         string nonce, timeStamp, signature, method, url;
 }; 
 
@@ -60,8 +60,8 @@ OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUs
     nonce = generateNonce();
     timeStamp = generateTimeStamp(); 
     BuildParameters();
-    printOAuth();
-    //webRequest();
+    //printOAuth();
+    webRequest();
 }
 
 void OAuth::newToken()
@@ -153,18 +153,13 @@ string OAuth::createSignature(const string& requestTokenSecret)
         normalizedParams += it->first + "=" + it->second;
     }
 
-    string key = urlencode(conn.ConsumerSecret + "&" + requestTokenSecret);
+    string key = conn.ConsumerSecret + "&";
     string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
 
     cout << "Normalized Params: \n" << normalizedParams << endl;
     cout << "Base string: \n" << signatureBase << endl;
 
-    char keych[key.length()];
-    char signatureBasech[signatureBase.length()];
-    strcpy(keych, key.c_str());
-    strcpy(signatureBasech, signatureBase.c_str());
-
-    string signature = HMACSHA1(keych, signatureBasech);
+    string signature = HMACSHA1(key, signatureBase);
 
     cout << signature << endl;
 
@@ -273,24 +268,20 @@ string OAuth::urlencode(const string &c)
     return escaped;
 }
 
-string OAuth::HMACSHA1(char key[], char data[])
+string OAuth::HMACSHA1(string key, string data)
 {
     /*
         Hash key using data with HMAC-SHA1 then base64 encode the result 
     */
 
-    unsigned char* digest;
-    // Using sha1 hash engine here.
-    // You may use other hash engines. e.g EVP_md5(), EVP_sha224, EVP_sha512, etc
-    digest = HMAC(EVP_sha1(), key, strlen(key), (unsigned char*) data, strlen(data), NULL, NULL);    
+    unsigned char strDigest[1024];
+    CHMAC_SHA1 objHMACSHA1;
 
-    // Be careful of the length of string with the choosen hash engine. SHA1 produces a 20-byte hash value which rendered as 40 characters.
-    // Change the length accordingly with your choosen hash engine
-    char mdString[41];
-    for(int i = 0; i < 19; i++)
-         sprintf(&mdString[i], "%02x", (unsigned int)digest[i]);
+    memset(strDigest, 0, 1024);
 
-    return base64((const unsigned char *)mdString, sizeof(mdString));
+    objHMACSHA1.HMAC_SHA1((unsigned char*)data.c_str(), data.length(), (unsigned char*) key.c_str(), key.length(), strDigest);
+
+    return base64(strDigest, strlen((char*)strDigest));
 }
 
 int main() {
