@@ -28,7 +28,7 @@ typedef map<string, string> OAuthParameters;
 
 /* Contains all info relevant to all requests. e.g Info shared among every OAuth instance */
 struct ConnectionConfig {
-    string Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, auth_token;
+    string Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, auth_token, requestToken;
 };
 
 /* OAuth represents a single web request. */
@@ -40,7 +40,7 @@ class OAuth {
         ConnectionConfig conn;
         OAuthParameters params;
         void BuildParameters(const string& requestToken = "", const string& httpMethod = "", const string& pin = "");
-        void newToken();
+        void newRequestToken();
         void webRequest();
         string base64(const unsigned char*, int);
         string generateNonce();
@@ -49,6 +49,7 @@ class OAuth {
         string urlencode(const string&);
         string char2hex(char);
         string HMACSHA1(string, string);
+        static size_t requestData(char *, size_t, size_t, void *);
         string nonce, timeStamp, signature, method, url;
 }; 
 
@@ -61,15 +62,31 @@ OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUs
     timeStamp = generateTimeStamp(); 
     BuildParameters();
     //printOAuth();
-    webRequest();
+
+    if (conn.requestToken.empty())
+    {
+        newRequestToken();
+    }
 }
 
-void OAuth::newToken()
+void OAuth::newRequestToken()
 {
     /*
         Create a new token. This method must be called before any other requests are made. 
         If a new request is made and there is no token readily available, this method is called beforehand.
     */
+    webRequest();
+}
+
+/*
+    Callback for webRequest() response
+*/
+size_t OAuth::requestData(char *ptr, size_t size, size_t nmemb, void *stream)
+{
+    //string *data = static_cast<string*>(ptr);
+    conn.requestToken = ptr;
+    cout << conn.requestToken << endl;
+    return size *nmemb;
 }
 
 /* 
@@ -96,8 +113,9 @@ void OAuth::webRequest()
         res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, requestData);
 
         res = curl_easy_perform(curl);
         if (res != CURLE_OK)
@@ -158,12 +176,12 @@ string OAuth::createSignature(const string& requestTokenSecret)
     string key = conn.ConsumerSecret + "&";
     string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
 
-    cout << "Normalized Params: \n" << normalizedParams << endl;
-    cout << "Base string: \n" << signatureBase << endl;
+    //cout << "Normalized Params: \n" << normalizedParams << endl;
+    //cout << "Base string: \n" << signatureBase << endl;
 
     string signature = HMACSHA1(key, signatureBase);
 
-    cout << signature << endl;
+    // cout << signature << endl;
 
     return urlencode(signature);
 }
@@ -275,7 +293,6 @@ string OAuth::HMACSHA1(string key, string data)
     /*
         Hash key using data with HMAC-SHA1 then base64 encode the result 
     */
-
     unsigned char strDigest[1024];
     CHMAC_SHA1 objHMACSHA1;
 
@@ -286,8 +303,10 @@ string OAuth::HMACSHA1(string key, string data)
     return base64(strDigest, strlen((char*)strDigest));
 }
 
+
+string OAuth::requestToken = "";
+
 int main() {
-    // For testing
 
     // 1. Create a new connection config instance for Twitter. This will be used for all OAuth connections related to Twitter
     ConnectionConfig Twitter;
@@ -300,6 +319,7 @@ int main() {
 
     // 2. Create a new connection using Twitter connection config
     OAuth test(Twitter, "POST", "https://api.twitter.com/oauth/request_token");
+
     return 0;
 }
 
