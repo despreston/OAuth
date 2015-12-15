@@ -12,46 +12,7 @@ Create request in 2 steps:
     url (string); url to make request to.
 */
 
-#include "stdio.h"
-#include <iostream>
-#include <time.h>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
-#include <openssl/buffer.h>
-#include "HMAC_SHA1.h"
-#include <map>
-#include <curl/curl.h>
-
-using namespace std;
-
-typedef map<string, string> OAuthParameters;
-
-/* Contains all info relevant to all requests. e.g Info shared among every OAuth instance */
-struct ConnectionConfig {
-    string Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, auth_token, requestToken;
-};
-
-/* OAuth represents a single web request. */
-class OAuth {
-    public: 
-        OAuth(ConnectionConfig connection, string, string);
-        void printOAuth();
-    private: 
-        ConnectionConfig conn;
-        OAuthParameters params;
-        void BuildParameters(const string& requestToken = "", const string& httpMethod = "", const string& pin = "");
-        void newRequestToken();
-        void webRequest();
-        string base64(const unsigned char*, int);
-        string generateNonce();
-        string generateTimeStamp();
-        string createSignature(const string& requestTokenSecret = "");
-        string urlencode(const string&);
-        string char2hex(char);
-        string HMACSHA1(string, string);
-        static size_t requestData(char *, size_t, size_t, void *);
-        string nonce, timeStamp, signature, method, url;
-}; 
+#include "oauth.h"
 
 OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUse) 
 {
@@ -69,23 +30,21 @@ OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUs
     }
 }
 
+/*
+    Create a new token. This method must be called before any other requests are made. 
+    If a new request is made and there is no token readily available, this method is called beforehand.
+*/
 void OAuth::newRequestToken()
 {
-    /*
-        Create a new token. This method must be called before any other requests are made. 
-        If a new request is made and there is no token readily available, this method is called beforehand.
-    */
     webRequest();
 }
 
 /*
     Callback for webRequest() response
 */
-size_t OAuth::requestData(char *ptr, size_t size, size_t nmemb, void *stream)
+size_t OAuth::requestData(char *ptr, size_t size, size_t nmemb, void *stream, void *f)
 {
-    //string *data = static_cast<string*>(ptr);
-    conn.requestToken = ptr;
-    cout << conn.requestToken << endl;
+    //static_cast<OAuth*>(f)->saveRequestData()
     return size *nmemb;
 }
 
@@ -302,9 +261,6 @@ string OAuth::HMACSHA1(string key, string data)
 
     return base64(strDigest, strlen((char*)strDigest));
 }
-
-
-string OAuth::requestToken = "";
 
 int main() {
 
