@@ -31,7 +31,7 @@ typedef map<string, string> OAuthParameters;
 
 /* Contains all info relevant to all requests. e.g Info shared among every OAuth instance */
 struct ConnectionConfig {
-    string Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, auth_token, requestToken;
+    string Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, oauth_token, oauth_token_secret;
 };
 
 /* OAuth represents a single web request. */
@@ -54,5 +54,6 @@ class OAuth {
         string HMACSHA1(string, string);
         static size_t requestDataCallback(char *, size_t, size_t, void *);
         void saveRequestResponse(char *);
+        void splitHeaders(map<string, string>&, string);
         string nonce, timeStamp, signature, method, url, response;
 }; 

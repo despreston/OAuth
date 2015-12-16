@@ -10,7 +10,7 @@ OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUs
     BuildParameters();
     //printOAuth();
 
-    if (conn.requestToken.empty())
+    if (conn.oauth_token.empty())
     {
         newRequestToken();
     }
@@ -22,13 +22,43 @@ OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUs
 */
 void OAuth::newRequestToken()
 {
+    map<string, string> headers;
+
     webRequest();
+    splitHeaders(headers, response);
+
+    conn.oauth_token = headers["oauth_token"];
+    conn.oauth_token_secret = headers["oauth_token_secret"];
 }
 
 void OAuth::saveRequestResponse(char *res)
 {
-    response = *res;
-    cout << res << endl;
+    response = res;
+}
+
+void OAuth::splitHeaders(map<string, string>& headersMap, string s)
+{
+    string headerDelimiter = "&", valuePairDelimiter = "=", singleHeader = "", name = "", value = "";
+    size_t start = 0, end = s.find(headerDelimiter), separator;
+
+    while (end != string::npos)
+    {
+        singleHeader = s.substr(start, end-start);
+        separator = singleHeader.find(valuePairDelimiter)+1;
+        name = singleHeader.substr(0, separator-1);
+        value = singleHeader.substr(separator);
+        headersMap[name] = value;
+
+        start = end+1;
+        end = s.find(headerDelimiter, start+1);
+    }
+
+    // While loop breaks before last header can be added
+    singleHeader = s.substr(start, end-start);
+    separator = singleHeader.find(valuePairDelimiter)+1;
+    name = singleHeader.substr(0, separator-1);
+    value = singleHeader.substr(separator);
+    headersMap[name] = value;
 }
 
 /*
@@ -77,7 +107,7 @@ void OAuth::webRequest()
             curl_easy_cleanup(curl);
             curl_slist_free_all(chunk);
         } else {
-            cout << "SUCCESS";
+            //cout << "SUCCESS";
         }
     }
 }
