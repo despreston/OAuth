@@ -16,7 +16,6 @@ Create request in 2 steps:
 #define OAUTH
 #endif
 
-#include "stdio.h"
 #include <iostream>
 #include <time.h>
 #include <openssl/bio.h>
@@ -53,6 +52,7 @@ class OAuth {
         string urlencode(const string&);
         string char2hex(char);
         string HMACSHA1(string, string);
-        static size_t requestData(char *, size_t, size_t, void *, void *);
-        string nonce, timeStamp, signature, method, url;
+        static size_t requestDataCallback(char *, size_t, size_t, void *);
+        void saveRequestResponse(char *);
+        string nonce, timeStamp, signature, method, url, response;
 }; 

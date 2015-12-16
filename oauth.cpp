@@ -1,17 +1,3 @@
-/* Desmond Preston 2015
-
-Compile with: sudo g++ -std=c++11 oauth.cpp -lcrypto -lcurl
-
-Oauth implementation
-
-Create request in 2 steps:
-1. Create new ConnectionConfig and assign values to Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, auth_token
-2. Create new Oauth object with parameters:
-    Connection (ConnectionConfig); this is the ConnectionConfig object you created in step 1 or another connection config already created.
-    httpMethod (string); the method to use for http request (GET, POST).
-    url (string); url to make request to.
-*/
-
 #include "oauth.h"
 
 OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUse) 
@@ -39,12 +25,19 @@ void OAuth::newRequestToken()
     webRequest();
 }
 
+void OAuth::saveRequestResponse(char *res)
+{
+    response = *res;
+    cout << res << endl;
+}
+
 /*
     Callback for webRequest() response
 */
-size_t OAuth::requestData(char *ptr, size_t size, size_t nmemb, void *stream, void *f)
+size_t OAuth::requestDataCallback(char *ptr, size_t size, size_t nmemb, void *f)
 {
-    //static_cast<OAuth*>(f)->saveRequestData()
+    static_cast<OAuth*>(f)->saveRequestResponse(ptr);
+
     return size *nmemb;
 }
 
@@ -74,7 +67,8 @@ void OAuth::webRequest()
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, requestData);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, requestDataCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
 
         res = curl_easy_perform(curl);
         if (res != CURLE_OK)
