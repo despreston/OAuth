@@ -311,7 +311,7 @@ int main() {
     Twitter.oauth_ver = "1.0";
     Twitter.oauth_callback = "oob";
 
-    // 2. Create a new connection using Twitter connection config
+    // 2. Create a new connection using Twitter connection config.
     OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");
     OAuth accessToken(&Twitter, "POST", "https://api.twitter.com/oauth/access_token");
 
