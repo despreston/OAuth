@@ -1,25 +1,21 @@
 #include "oauth.h"
 
-OAuth::OAuth(ConnectionConfig ConnectionToUse, string httpMethod, string urlToUse) 
+OAuth::OAuth(ConnectionConfig *ConnectionToUse, string httpMethod, string urlToUse)
 {
     conn = ConnectionToUse;
     method = httpMethod;
     url = urlToUse;
     nonce = generateNonce();
-    timeStamp = generateTimeStamp(); 
+    timeStamp = generateTimeStamp();
+
     BuildParameters();
     //printOAuth();
-
-    if (conn.oauth_token.empty())
+    if (conn->request_token.empty())
     {
         newRequestToken();
     }
 }
 
-/*
-    Create a new token. This method must be called before any other requests are made. 
-    If a new request is made and there is no token readily available, this method is called beforehand.
-*/
 void OAuth::newRequestToken()
 {
     map<string, string> headers;
@@ -27,8 +23,15 @@ void OAuth::newRequestToken()
     webRequest();
     splitHeaders(headers, response);
 
-    conn.oauth_token = headers["oauth_token"];
-    conn.oauth_token_secret = headers["oauth_token_secret"];
+    conn->request_token = headers["oauth_token"];
+    conn->oauth_token_secret = headers["oauth_token_secret"];
+
+    createAuthenticationURL();
+}
+
+void OAuth::createAuthenticationURL()
+{
+    cout << "In your browser, please go to:\n" << conn->authenticate_url + "?" + response <<endl; 
 }
 
 void OAuth::saveRequestResponse(char *res)
@@ -95,7 +98,7 @@ void OAuth::webRequest()
         res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, requestDataCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
@@ -115,11 +118,12 @@ void OAuth::webRequest()
 void OAuth::BuildParameters(const string& requestToken, const string& requestTokenSecret, const string& pin)
 {
     //Set first params provided from connection settings
-    params["oauth_consumer_key"] = conn.Consumerkey;
+    params["oauth_consumer_key"] = conn->Consumerkey;
     params["oauth_nonce"] = nonce;
     params["oauth_timestamp"] = timeStamp;
-    params["oauth_version"] = conn.oauth_ver;
+    params["oauth_version"] = conn->oauth_ver;
     params["oauth_signature_method"] = "HMAC-SHA1";
+    params["oauth_callback"] = conn->oauth_callback;
 
     if (!requestToken.empty())
     {
@@ -156,7 +160,7 @@ string OAuth::createSignature(const string& requestTokenSecret)
         normalizedParams += it->first + "=" + it->second;
     }
 
-    string key = conn.ConsumerSecret + "&";
+    string key = conn->ConsumerSecret + "&";
     string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
 
     //cout << "Normalized Params: \n" << normalizedParams << endl;
@@ -175,12 +179,12 @@ void OAuth::printOAuth()
          << "Timestamp: " << timeStamp << endl
          << "=================================" << endl
          << "Connection Details: " << endl
-         << "Consumer Key: " << conn.Consumerkey << endl
-         << "Consumer Secret: " << conn.ConsumerSecret << endl
-         << "Hostname: " << conn.hostname << endl
-         << "Request Token URL: " << conn.request_token_url << endl
-         << "OAuth Version: " << conn.oauth_ver << endl
-         << "OAuth CallBack: " << conn.oauth_callback << endl;
+         << "Consumer Key: " << conn->Consumerkey << endl
+         << "Consumer Secret: " << conn->ConsumerSecret << endl
+         << "Hostname: " << conn->hostname << endl
+         << "Request Token URL: " << conn->request_token_url << endl
+         << "OAuth Version: " << conn->oauth_ver << endl
+         << "OAuth CallBack: " << conn->oauth_callback << endl;
 }
 
 string OAuth::generateNonce()
@@ -210,22 +214,18 @@ string OAuth::base64(const unsigned char *input, int length)
         Convert to base64
     */
   BIO *bmem, *b64;
-  BUF_MEM *bptr;
+  //BUF_MEM *bptr;
 
   b64 = BIO_new(BIO_f_base64());
   bmem = BIO_new(BIO_s_mem());
   b64 = BIO_push(b64, bmem);
+
   BIO_write(b64, input, length);
   BIO_flush(b64);
-  BIO_get_mem_ptr(b64, &bptr);
+  char* output;
+  BIO_get_mem_data(bmem, &output);
 
-  char *buff = (char *)malloc(bptr->length);
-  memcpy(buff, bptr->data, bptr->length-1);
-  buff[bptr->length-1] = 0;
-
-  BIO_free_all(b64);
-
-  return string((const char*)buff);
+  return string((const char*)output);
 }
 
 // char2hex and urlencode from http://www.zedwood.com/article/111/cpp-urlencode-function
@@ -255,10 +255,10 @@ string OAuth::urlencode(const string &c)
     for(int i=0; i<max; i++)
     {
         if ( (48 <= c[i] && c[i] <= 57) ||//0-9
-            (65 <= c[i] && c[i] <= 90) ||//ABC...XYZ
-            (97 <= c[i] && c[i] <= 122) || //abc...xyz
-            (c[i]=='~' || c[i]=='-' || c[i]=='_' || c[i]=='.')
-            )
+             (65 <= c[i] && c[i] <= 90) ||//ABC...XYZ
+             (97 <= c[i] && c[i] <= 122) || //abc...xyz
+             (c[i]=='~' || c[i]=='-' || c[i]=='_' || c[i]=='.')
+                )
         {
             escaped.append( &c[i], 1);
         }
@@ -294,11 +294,13 @@ int main() {
     Twitter.ConsumerSecret = "CCu9u5pRUOtXeO9VsitmgVSL4RbQwbiWX06aBLkaRsJRVt6EKL";
     Twitter.hostname = "http://twitter.com";
     Twitter.request_token_url = "https://api.twitter.com/oauth/request_token";
+    Twitter.authenticate_url = "https://twitter.com/oauth/authenticate";
     Twitter.oauth_ver = "1.0";
     Twitter.oauth_callback = "oob";
 
     // 2. Create a new connection using Twitter connection config
-    OAuth test(Twitter, "POST", "https://api.twitter.com/oauth/request_token");
+    OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");
+    //OAuth authenticate(&Twitter, "GET", "https://api.twitter.com/oauth/authenticate");
 
     return 0;
 }

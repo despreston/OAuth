@@ -1,6 +1,6 @@
 /* Desmond Preston 2015
 
-Compile with: sudo g++ -std=c++11 oauth.cpp -lcrypto -lcurl
+Compile with: sudo g++ -std=c++11 oauth.cpp SHA1.cpp HMAC_SHA1.cpp -lcrypto -lcurl
 
 Oauth implementation
 
@@ -31,19 +31,30 @@ typedef map<string, string> OAuthParameters;
 
 /* Contains all info relevant to all requests. e.g Info shared among every OAuth instance */
 struct ConnectionConfig {
-    string Consumerkey, ConsumerSecret, hostname, request_token_url, oauth_ver, oauth_callback, oauth_token, oauth_token_secret;
+    string Consumerkey, 
+    	ConsumerSecret, 
+    	hostname, 
+    	request_token_url, 
+        authenticate_url,
+    	oauth_ver, 
+    	oauth_callback, 
+    	request_token, 
+    	access_token, 
+    	oauth_token_secret;
+    bool authenticated = false;
 };
 
 /* OAuth represents a single web request. */
 class OAuth {
     public: 
-        OAuth(ConnectionConfig connection, string, string);
+        OAuth(ConnectionConfig *connection, string, string);
         void printOAuth();
     private: 
-        ConnectionConfig conn;
+        ConnectionConfig *conn;
         OAuthParameters params;
         void BuildParameters(const string& requestToken = "", const string& httpMethod = "", const string& pin = "");
         void newRequestToken();
+        void createAuthenticationURL();
         void webRequest();
         string base64(const unsigned char*, int);
         string generateNonce();
