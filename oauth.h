@@ -39,8 +39,9 @@ struct ConnectionConfig {
     	oauth_ver, 
     	oauth_callback, 
     	request_token, 
-    	access_token, 
+        verifier,
     	oauth_token_secret;
+
     bool authenticated = false;
 };
 
@@ -52,9 +53,10 @@ class OAuth {
     private: 
         ConnectionConfig *conn;
         OAuthParameters params;
-        void BuildParameters(const string& requestToken = "", const string& httpMethod = "", const string& pin = "");
+        void BuildParameters();
         void newRequestToken();
         void createAuthenticationURL();
+        void exchangeTokens();
         void webRequest();
         string base64(const unsigned char*, int);
         string generateNonce();

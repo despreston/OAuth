@@ -14,6 +14,10 @@ OAuth::OAuth(ConnectionConfig *ConnectionToUse, string httpMethod, string urlToU
     {
         newRequestToken();
     }
+    else if (!conn->authenticated && !conn->verifier.empty())
+    {
+        exchangeTokens();
+    }
 }
 
 void OAuth::newRequestToken()
@@ -32,11 +36,20 @@ void OAuth::newRequestToken()
 void OAuth::createAuthenticationURL()
 {
     cout << "In your browser, please go to:\n" << conn->authenticate_url + "?" + response <<endl; 
+    cout << "Enter the pin here: ";
+    cin >> conn->verifier;
+}
+
+void OAuth::exchangeTokens()
+{
+    url = url + "?oauth_verifier=" + conn->verifier;
+    webRequest();
 }
 
 void OAuth::saveRequestResponse(char *res)
 {
     response = res;
+    cout << response << endl;
 }
 
 void OAuth::splitHeaders(map<string, string>& headersMap, string s)
@@ -98,7 +111,7 @@ void OAuth::webRequest()
         res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, requestDataCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
@@ -115,7 +128,7 @@ void OAuth::webRequest()
     }
 }
 
-void OAuth::BuildParameters(const string& requestToken, const string& requestTokenSecret, const string& pin)
+void OAuth::BuildParameters()
 {
     //Set first params provided from connection settings
     params["oauth_consumer_key"] = conn->Consumerkey;
@@ -125,17 +138,17 @@ void OAuth::BuildParameters(const string& requestToken, const string& requestTok
     params["oauth_signature_method"] = "HMAC-SHA1";
     params["oauth_callback"] = conn->oauth_callback;
 
-    if (!requestToken.empty())
+    if (!conn->request_token.empty())
     {
-        params["oauth_token"] = requestToken;
+        params["oauth_token"] = conn->request_token;
     }
 
-    if (!pin.empty())
+    if (!conn->verifier.empty())
     {
-        params["oauth_verifier"] = pin;
+        params["oauth_verifier"] = conn->verifier;
     }
 
-    string signature = createSignature(requestTokenSecret);
+    string signature = createSignature(conn->oauth_token_secret);
     params["oauth_signature"] = signature;
 }
 
@@ -300,7 +313,7 @@ int main() {
 
     // 2. Create a new connection using Twitter connection config
     OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");
-    //OAuth authenticate(&Twitter, "GET", "https://api.twitter.com/oauth/authenticate");
+    OAuth accessToken(&Twitter, "POST", "https://api.twitter.com/oauth/access_token");
 
     return 0;
 }
