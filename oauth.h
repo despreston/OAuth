@@ -50,11 +50,13 @@ class OAuth {
     public: 
         OAuth(ConnectionConfig *connection, string, string);
         void printOAuth();
+        void splitHeaders(map<string, string>&, string);
+        string response;
     private: 
         ConnectionConfig *conn;
         OAuthParameters params;
         void BuildParameters();
-        void newRequestToken();
+        void setRequestTokenFromHeaders();
         void createAuthenticationURL();
         void exchangeTokens();
         void webRequest();
@@ -67,6 +69,5 @@ class OAuth {
         string HMACSHA1(string, string);
         static size_t requestDataCallback(char *, size_t, size_t, void *);
         void saveRequestResponse(char *);
-        void splitHeaders(map<string, string>&, string);
-        string nonce, timeStamp, signature, method, url, response;
+        string nonce, timeStamp, signature, method, url;
 }; 

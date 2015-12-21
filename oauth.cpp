@@ -12,7 +12,8 @@ OAuth::OAuth(ConnectionConfig *ConnectionToUse, string httpMethod, string urlToU
     //printOAuth();
     if (conn->request_token.empty())
     {
-        newRequestToken();
+        setRequestTokenFromHeaders();
+        createAuthenticationURL();
     }
     else if (!conn->authenticated && !conn->verifier.empty())
     {
@@ -20,7 +21,7 @@ OAuth::OAuth(ConnectionConfig *ConnectionToUse, string httpMethod, string urlToU
     }
 }
 
-void OAuth::newRequestToken()
+void OAuth::setRequestTokenFromHeaders()
 {
     map<string, string> headers;
 
@@ -29,8 +30,6 @@ void OAuth::newRequestToken()
 
     conn->request_token = headers["oauth_token"];
     conn->oauth_token_secret = headers["oauth_token_secret"];
-
-    createAuthenticationURL();
 }
 
 void OAuth::createAuthenticationURL()
@@ -43,13 +42,16 @@ void OAuth::createAuthenticationURL()
 void OAuth::exchangeTokens()
 {
     url = url + "?oauth_verifier=" + conn->verifier;
-    webRequest();
+    
+    //Exchanging oauth_token and oauth_token_secret for validated tokens.
+    setRequestTokenFromHeaders();
+
+    conn->authenticated = true;
 }
 
 void OAuth::saveRequestResponse(char *res)
 {
     response = res;
-    cout << response << endl;
 }
 
 void OAuth::splitHeaders(map<string, string>& headersMap, string s)
@@ -111,7 +113,7 @@ void OAuth::webRequest()
         res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, requestDataCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
@@ -176,12 +178,7 @@ string OAuth::createSignature(const string& requestTokenSecret)
     string key = conn->ConsumerSecret + "&";
     string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
 
-    //cout << "Normalized Params: \n" << normalizedParams << endl;
-    //cout << "Base string: \n" << signatureBase << endl;
-
     string signature = HMACSHA1(key, signatureBase);
-
-    // cout << signature << endl;
 
     return urlencode(signature);
 }
@@ -297,24 +294,5 @@ string OAuth::HMACSHA1(string key, string data)
     objHMACSHA1.HMAC_SHA1((unsigned char*)data.c_str(), data.length(), (unsigned char*) key.c_str(), key.length(), strDigest);
 
     return base64(strDigest, strlen((char*)strDigest));
-}
-
-int main() {
-
-    // 1. Create a new connection config instance for Twitter. This will be used for all OAuth connections related to Twitter
-    ConnectionConfig Twitter;
-    Twitter.Consumerkey = "uvSDDZJW7XiG64akUzMgS44tF";
-    Twitter.ConsumerSecret = "CCu9u5pRUOtXeO9VsitmgVSL4RbQwbiWX06aBLkaRsJRVt6EKL";
-    Twitter.hostname = "http://twitter.com";
-    Twitter.request_token_url = "https://api.twitter.com/oauth/request_token";
-    Twitter.authenticate_url = "https://twitter.com/oauth/authenticate";
-    Twitter.oauth_ver = "1.0";
-    Twitter.oauth_callback = "oob";
-
-    // 2. Create a new connection using Twitter connection config.
-    OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");
-    OAuth accessToken(&Twitter, "POST", "https://api.twitter.com/oauth/access_token");
-
-    return 0;
 }
 
