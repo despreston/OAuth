@@ -18,9 +18,9 @@ int main() {
     // 2. Create a new connection using Twitter connection config.
     OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");
     OAuth accessToken(&Twitter, "POST", "https://api.twitter.com/oauth/access_token");
-    // map<string,string> headers;
-    // accessToken.splitHeaders(headers, accessToken.response);
+    
     OAuth getTimeLine(&Twitter, "GET", "https://api.twitter.com/1.1/statuses/home_timeline.json");
+
     cout << getTimeLine.response << endl;
     
     return 0;
