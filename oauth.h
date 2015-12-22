@@ -63,11 +63,12 @@ class OAuth {
         string base64(const unsigned char*, int);
         string generateNonce();
         string generateTimeStamp();
-        string createSignature(const string& requestTokenSecret = "");
+        string createSignature();
         string urlencode(const string&);
         string char2hex(char);
         string HMACSHA1(string, string);
         static size_t requestDataCallback(char *, size_t, size_t, void *);
         void saveRequestResponse(char *);
+        string strippedURL(string);
         string nonce, timeStamp, signature, method, url;
 }; 

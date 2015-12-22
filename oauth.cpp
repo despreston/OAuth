@@ -19,39 +19,41 @@ OAuth::OAuth(ConnectionConfig *ConnectionToUse, string httpMethod, string urlToU
     {
         exchangeTokens();
     }
+    else 
+    {
+        webRequest();
+    }
 }
 
-void OAuth::setRequestTokenFromHeaders()
+/**
+    UTILS for mostly data manipulation
+    START
+**/
+
+string OAuth::urlencode(const string &c)
 {
-    map<string, string> headers;
-
-    webRequest();
-    splitHeaders(headers, response);
-
-    conn->request_token = headers["oauth_token"];
-    conn->oauth_token_secret = headers["oauth_token_secret"];
-}
-
-void OAuth::createAuthenticationURL()
-{
-    cout << "In your browser, please go to:\n" << conn->authenticate_url + "?" + response <<endl; 
-    cout << "Enter the pin here: ";
-    cin >> conn->verifier;
-}
-
-void OAuth::exchangeTokens()
-{
-    url = url + "?oauth_verifier=" + conn->verifier;
-    
-    //Exchanging oauth_token and oauth_token_secret for validated tokens.
-    setRequestTokenFromHeaders();
-
-    conn->authenticated = true;
-}
-
-void OAuth::saveRequestResponse(char *res)
-{
-    response = res;
+    /*
+        Encode according to OAuth encoding standard. Not typical URL encoding.
+    */
+    string escaped;
+    int max = c.length();
+    for(int i=0; i<max; i++)
+    {
+        if ( (48 <= c[i] && c[i] <= 57) ||//0-9
+             (65 <= c[i] && c[i] <= 90) ||//ABC...XYZ
+             (97 <= c[i] && c[i] <= 122) || //abc...xyz
+             (c[i]=='~' || c[i]=='-' || c[i]=='_' || c[i]=='.')
+                )
+        {
+            escaped.append( &c[i], 1);
+        }
+        else
+        {
+            escaped.append("%");
+            escaped.append( char2hex(c[i]) );//converts char 255 to string "FF"
+        }
+    }
+    return escaped;
 }
 
 void OAuth::splitHeaders(map<string, string>& headersMap, string s)
@@ -77,6 +79,51 @@ void OAuth::splitHeaders(map<string, string>& headersMap, string s)
     name = singleHeader.substr(0, separator-1);
     value = singleHeader.substr(separator);
     headersMap[name] = value;
+}
+
+string OAuth::strippedURL(string u)
+{
+    return u.substr(0, u.find("?")-1);
+}
+
+/**
+    END UTILS
+**/
+
+
+void OAuth::setRequestTokenFromHeaders()
+{
+    map<string, string> headers;
+
+    webRequest();
+    splitHeaders(headers, response);
+
+    cout << headers["oauth_token"] << endl;
+    conn->request_token = headers["oauth_token"];
+    conn->oauth_token_secret = headers["oauth_token_secret"];
+}
+
+void OAuth::createAuthenticationURL()
+{
+    cout << "In your browser, please go to:\n" << conn->authenticate_url + "?" + response <<endl; 
+    cout << "Enter the pin here: ";
+    cin >> conn->verifier;
+}
+
+void OAuth::exchangeTokens()
+{
+    url = url + "?oauth_verifier=" + conn->verifier;
+    
+    //Exchanging oauth_token and oauth_token_secret for validated tokens.
+    setRequestTokenFromHeaders();
+
+    conn->authenticated = true;
+}
+
+void OAuth::saveRequestResponse(char *res)
+{
+    response = res;
+    cout << response << endl;
 }
 
 /*
@@ -113,8 +160,11 @@ void OAuth::webRequest()
         res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
+        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        if (method == "POST")
+        {
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
+        }
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, requestDataCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
 
@@ -145,16 +195,16 @@ void OAuth::BuildParameters()
         params["oauth_token"] = conn->request_token;
     }
 
-    if (!conn->verifier.empty())
+    if (!conn->verifier.empty() && !conn->authenticated)
     {
         params["oauth_verifier"] = conn->verifier;
     }
 
-    string signature = createSignature(conn->oauth_token_secret);
+    string signature = createSignature();
     params["oauth_signature"] = signature;
 }
 
-string OAuth::createSignature(const string& requestTokenSecret)
+string OAuth::createSignature()
 {
     /* 
         1. Create a single string of query params from the params map
@@ -176,6 +226,12 @@ string OAuth::createSignature(const string& requestTokenSecret)
     }
 
     string key = conn->ConsumerSecret + "&";
+
+    if (!conn->oauth_token_secret.empty()) 
+    {
+        key.append(conn->oauth_token_secret);
+    }
+
     string signatureBase = method + "&" + urlencode(url) + "&" + urlencode(normalizedParams);
 
     string signature = HMACSHA1(key, signatureBase);
@@ -253,32 +309,6 @@ string OAuth::char2hex( char dec )
     r.append( &dig1, 1);
     r.append( &dig2, 1);
     return r;
-}
-
-string OAuth::urlencode(const string &c)
-{
-    /*
-        Encode according to OAuth encoding standard. Not typical URL encoding.
-    */
-    string escaped;
-    int max = c.length();
-    for(int i=0; i<max; i++)
-    {
-        if ( (48 <= c[i] && c[i] <= 57) ||//0-9
-             (65 <= c[i] && c[i] <= 90) ||//ABC...XYZ
-             (97 <= c[i] && c[i] <= 122) || //abc...xyz
-             (c[i]=='~' || c[i]=='-' || c[i]=='_' || c[i]=='.')
-                )
-        {
-            escaped.append( &c[i], 1);
-        }
-        else
-        {
-            escaped.append("%");
-            escaped.append( char2hex(c[i]) );//converts char 255 to string "FF"
-        }
-    }
-    return escaped;
 }
 
 string OAuth::HMACSHA1(string key, string data)
