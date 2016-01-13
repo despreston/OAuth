@@ -14,6 +14,7 @@ int main() {
     Twitter.authenticate_url = "https://twitter.com/oauth/authenticate";
     Twitter.oauth_ver = "1.0";
     Twitter.oauth_callback = "oob";
+    Twitter.nickname = "des_twitter";
 
     // 2. Create a new connection using Twitter connection config.
     OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");

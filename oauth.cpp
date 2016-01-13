@@ -8,8 +8,10 @@ OAuth::OAuth(ConnectionConfig *ConnectionToUse, string httpMethod, string urlToU
     nonce = generateNonce();
     timeStamp = generateTimeStamp();
 
+    string filename = conn->nickname + ".txt";
+
     BuildParameters();
-    //printOAuth();
+    
     if (conn->request_token.empty())
     {
         setRequestTokenFromHeaders();
@@ -90,7 +92,9 @@ string OAuth::strippedURL(string u)
     END UTILS
 **/
 
-
+/**
+* Swap the token information
+**/
 void OAuth::setRequestTokenFromHeaders()
 {
     map<string, string> headers;
@@ -101,6 +105,47 @@ void OAuth::setRequestTokenFromHeaders()
     cout << headers["oauth_token"] << endl;
     conn->request_token = headers["oauth_token"];
     conn->oauth_token_secret = headers["oauth_token_secret"];
+
+    //saveInfoToFile();
+}
+
+/**
+* Save user information including token to a file
+**/
+void OAuth::saveInfoToFile() {
+    ofstream file;
+    string data;
+    string filename = conn->nickname + ".txt";
+
+    data = "request_token:" + conn->request_token + "\n" + "oauth_token_secret:" + conn->oauth_token_secret + "\n";
+
+    file.open(filename);
+    file << data;
+    file.close();
+}
+
+/**
+* Load user information including token from a file. Return true if file is loaded successfully
+**/
+bool OAuth::loadInfoFromFile(string filename)
+{
+    string line;
+    ifstream file(filename);
+
+    if (file.is_open()) 
+    {
+        while (getline(file, line))
+        {
+            cout << line << "\n";
+        }
+
+        file.close();
+        return true;
+    }
+    else 
+    {
+        return false;
+    }
 }
 
 void OAuth::createAuthenticationURL()

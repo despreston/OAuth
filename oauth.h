@@ -1,6 +1,6 @@
 /* Desmond Preston 2015
 
-Compile with: sudo g++ -std=c++11 oauth.cpp SHA1.cpp HMAC_SHA1.cpp -lcrypto -lcurl
+Compile with: sudo g++ -std=c++11 oauth.cpp SHA1.cpp HMAC_SHA1.cpp main.cpp -lcrypto -lcurl
 
 Oauth implementation
 
@@ -17,6 +17,7 @@ Create request in 2 steps:
 #endif
 
 #include <iostream>
+#include <fstream>
 #include <time.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
@@ -40,7 +41,8 @@ struct ConnectionConfig {
     	oauth_callback, 
     	request_token, 
         verifier,
-    	oauth_token_secret;
+    	oauth_token_secret,
+        nickname;
 
     bool authenticated = false;
 };
@@ -69,6 +71,8 @@ class OAuth {
         string HMACSHA1(string, string);
         static size_t requestDataCallback(char *, size_t, size_t, void *);
         void saveRequestResponse(char *);
+        void saveInfoToFile();
+        bool loadInfoFromFile(string);
         string strippedURL(string);
         string nonce, timeStamp, signature, method, url;
 }; 
