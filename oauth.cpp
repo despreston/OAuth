@@ -7,23 +7,30 @@ OAuth::OAuth(ConnectionConfig *ConnectionToUse, string httpMethod, string urlToU
     url = urlToUse;
     nonce = generateNonce();
     timeStamp = generateTimeStamp();
+}
 
+void OAuth::doRequest()
+{
     string filename = conn->nickname + ".txt";
-
-    BuildParameters();
     
-    if (conn->request_token.empty())
+    if(conn->hasSavedFile())
     {
-        setRequestTokenFromHeaders();
-        createAuthenticationURL();
-    }
-    else if (!conn->authenticated && !conn->verifier.empty())
-    {
-        exchangeTokens();
-    }
-    else 
-    {
+        loadInfoFromFile(filename);
+        BuildParameters();
         webRequest();
+    }
+    else {
+        BuildParameters();
+
+        if (conn->request_token.empty())
+        {
+            setRequestTokenFromHeaders();
+            createAuthenticationURL();
+        }
+        else if (!conn->authenticated && !conn->verifier.empty())
+        {
+            exchangeTokens();
+        }
     }
 }
 
@@ -102,11 +109,8 @@ void OAuth::setRequestTokenFromHeaders()
     webRequest();
     splitHeaders(headers, response);
 
-    cout << headers["oauth_token"] << endl;
     conn->request_token = headers["oauth_token"];
     conn->oauth_token_secret = headers["oauth_token_secret"];
-
-    //saveInfoToFile();
 }
 
 /**
@@ -117,7 +121,7 @@ void OAuth::saveInfoToFile() {
     string data;
     string filename = conn->nickname + ".txt";
 
-    data = "request_token:" + conn->request_token + "\n" + "oauth_token_secret:" + conn->oauth_token_secret + "\n";
+    data = "oauth_token=" + conn->request_token + "&oauth_token_secret=" + conn->oauth_token_secret;
 
     file.open(filename);
     file << data;
@@ -131,15 +135,21 @@ bool OAuth::loadInfoFromFile(string filename)
 {
     string line;
     ifstream file(filename);
+    map<string, string> headers;
 
     if (file.is_open()) 
     {
         while (getline(file, line))
         {
-            cout << line << "\n";
+            splitHeaders(headers, line);
         }
 
         file.close();
+
+        conn->request_token = headers["oauth_token"];
+        conn->oauth_token_secret = headers["oauth_token_secret"];
+        conn->authenticated = true;
+
         return true;
     }
     else 
@@ -163,12 +173,12 @@ void OAuth::exchangeTokens()
     setRequestTokenFromHeaders();
 
     conn->authenticated = true;
+    saveInfoToFile();
 }
 
 void OAuth::saveRequestResponse(char *res)
 {
     response = res;
-    cout << response << endl;
 }
 
 /*
@@ -205,7 +215,6 @@ void OAuth::webRequest()
         res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         if (method == "POST")
         {
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header.c_str());
@@ -370,4 +379,5 @@ string OAuth::HMACSHA1(string key, string data)
 
     return base64(strDigest, strlen((char*)strDigest));
 }
+
 

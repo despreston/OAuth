@@ -45,6 +45,13 @@ struct ConnectionConfig {
         nickname;
 
     bool authenticated = false;
+
+    bool hasSavedFile()
+    {
+        string filename = nickname + ".txt";
+        ifstream infile(filename);
+        return infile.good();
+    }
 };
 
 /* OAuth represents a single web request. */
@@ -54,6 +61,8 @@ class OAuth {
         void printOAuth();
         void splitHeaders(map<string, string>&, string);
         string response;
+        void doRequest();
+        void saveInfoToFile();
     private: 
         ConnectionConfig *conn;
         OAuthParameters params;
@@ -71,7 +80,6 @@ class OAuth {
         string HMACSHA1(string, string);
         static size_t requestDataCallback(char *, size_t, size_t, void *);
         void saveRequestResponse(char *);
-        void saveInfoToFile();
         bool loadInfoFromFile(string);
         string strippedURL(string);
         string nonce, timeStamp, signature, method, url;

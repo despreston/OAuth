@@ -17,11 +17,21 @@ int main() {
     Twitter.nickname = "des_twitter";
 
     // 2. Create a new connection using Twitter connection config.
-    OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");
-    OAuth accessToken(&Twitter, "POST", "https://api.twitter.com/oauth/access_token");
-    
     OAuth getTimeLine(&Twitter, "GET", "https://api.twitter.com/1.1/statuses/home_timeline.json");
 
+    if (!Twitter.hasSavedFile()) {
+        OAuth requestToken(&Twitter, "POST", "https://api.twitter.com/oauth/request_token");
+        requestToken.doRequest();
+        // cout << requestToken.response << endl;
+        // cout << "\n\n\n\n\n";
+
+        OAuth accessToken(&Twitter, "POST", "https://api.twitter.com/oauth/access_token");
+        accessToken.doRequest();
+        // cout << accessToken.response << endl;
+        // cout << "\n\n\n\n\n";
+    }
+    
+    getTimeLine.doRequest();
     cout << getTimeLine.response << endl;
     
     return 0;
