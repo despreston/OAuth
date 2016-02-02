@@ -59,14 +59,14 @@ class OAuth {
     public: 
         OAuth(ConnectionConfig *connection, string, string);
         void printOAuth();
-        void splitHeaders(map<string, string>&, string);
-        string response;
         void doRequest();
         void saveInfoToFile();
+        string response;
     private: 
         ConnectionConfig *conn;
         OAuthParameters params;
         void BuildParameters();
+        void splitHeaders(map<string, string>&, string);
         void setRequestTokenFromHeaders();
         void createAuthenticationURL();
         void exchangeTokens();
